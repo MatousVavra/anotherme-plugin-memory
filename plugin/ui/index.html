@@ -1,0 +1,64 @@
+<div class="memory-layout" x-data="memoryPlugin()">
+    <div class="memory-header">
+        <span class="memory-count" x-text="facts.length + ' facts collected'"></span>
+        <span class="memory-updated" x-show="facts.length > 0">Updated <span x-text="AM.utils.formatDate(facts[0]?.created_at)"></span></span>
+    </div>
+
+    <div class="filter-chips">
+        <button class="filter-chip" :class="{ active: filter === 'All' }" @click="filter = 'All'">All</button>
+        <button class="filter-chip" :class="{ active: filter === 'People' }" @click="filter = 'People'">People</button>
+        <button class="filter-chip" :class="{ active: filter === 'Work' }" @click="filter = 'Work'">Work</button>
+        <button class="filter-chip" :class="{ active: filter === 'Preferences' }" @click="filter = 'Preferences'">Preferences</button>
+        <button class="filter-chip" :class="{ active: filter === 'Health' }" @click="filter = 'Health'">Health</button>
+    </div>
+
+    <div class="people-section" x-show="people.length > 0">
+        <div class="people-header">People</div>
+        <div class="people-list">
+            <template x-for="person in people" :key="person.name">
+                <div class="person-row">
+                    <div class="person-name" x-text="person.name"></div>
+                    <div class="person-hint">
+                        <input
+                            type="text"
+                            class="person-hint-input"
+                            x-model="person.pronunciation_hint"
+                            placeholder="Pronunciation hint"
+                            :aria-label="'Pronunciation hint for ' + person.name"
+                        >
+                        <button class="person-save-btn" @click="savePersonHint(person)">Save</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <div class="memory-grid">
+        <template x-if="filteredFacts().length === 0">
+            <div class="memory-empty">No facts collected yet. Your assistant learns as you chat.</div>
+        </template>
+        <template x-for="fact in filteredFacts()" :key="fact.id">
+            <div class="fact-card">
+                <template x-if="editingId !== fact.id">
+                    <div class="fact-content">
+                        <div class="fact-value" x-text="fact.value"></div>
+                        <div class="fact-source" x-text="factSource(fact)"></div>
+                        <div class="fact-actions">
+                            <button class="fact-action-btn" @click="startEditFact(fact)">Edit</button>
+                            <button class="fact-action-btn danger" @click="deleteFact(fact.id)">Remove</button>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="editingId === fact.id">
+                    <div class="fact-edit">
+                        <textarea class="fact-edit-input" x-model="editValue" rows="2"></textarea>
+                        <div class="fact-actions">
+                            <button class="fact-action-btn save" @click="saveEditFact(fact.id)">Save</button>
+                            <button class="fact-action-btn" @click="editingId = null">Cancel</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+</div>
