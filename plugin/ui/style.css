@@ -2,6 +2,79 @@
 .memory-header { display: flex; gap: 16px; align-items: baseline; margin-bottom: 20px; }
 .memory-count { font-weight: 600; font-size: 16px; }
 .memory-updated { font-size: 12px; color: var(--muted); }
+.memory-search {
+    margin-left: auto;
+    width: 220px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+}
+.memory-search:focus { outline: none; border-color: var(--accent); }
+
+.contradiction-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    background: var(--elevated);
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-md);
+}
+.contradiction-banner-text { font-size: 14px; font-weight: 500; }
+.contradiction-banner-actions { display: flex; align-items: center; gap: 8px; }
+.contradiction-review-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--ink);
+    font-weight: 500;
+    transition: all 0.15s;
+}
+.contradiction-review-btn:hover { background: var(--warm); border-color: var(--warm); }
+.contradiction-close-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+}
+.contradiction-close-btn:hover { color: var(--text); }
+
+.contradiction-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.contradiction-card {
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+}
+.contradiction-key {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+.contradiction-values { display: flex; flex-direction: column; gap: 6px; }
+.contradiction-value { display: flex; align-items: baseline; gap: 8px; font-size: 14px; flex-wrap: wrap; }
+.contradiction-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+}
+.contradiction-text { font-family: var(--font-reading); }
+.contradiction-value.new .contradiction-text { font-weight: 600; }
+.contradiction-when { font-size: 11px; color: var(--muted); }
+.contradiction-actions { display: flex; gap: 8px; margin-top: 10px; }
 
 .people-section { margin-bottom: 24px; }
 .people-header {
@@ -12,25 +85,40 @@
     margin-bottom: 10px;
 }
 .people-list { display: flex; flex-direction: column; gap: 8px; }
+.person-item { background: var(--elevated); border-radius: var(--radius-md); overflow: hidden; }
 .person-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     padding: 10px 12px;
-    background: var(--elevated);
-    border-radius: var(--radius-md);
+    cursor: pointer;
 }
+.person-row:hover { background: var(--surface); }
+.person-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .person-name { font-weight: 500; font-size: 14px; }
-.person-hint {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    justify-content: flex-end;
+.person-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.person-relationship { font-size: 12px; color: var(--muted); }
+.person-tag {
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: var(--muted);
 }
-.person-hint-input {
-    width: 220px;
+.person-chevron { color: var(--muted); font-size: 12px; flex-shrink: 0; }
+.person-detail { padding: 12px; border-top: 1px solid var(--border); }
+.person-detail-fields { display: flex; flex-direction: column; gap: 10px; }
+.person-field { display: flex; flex-direction: column; gap: 4px; }
+.person-field-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+}
+.person-field-input {
+    width: 100%;
+    box-sizing: border-box;
     padding: 6px 10px;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -38,7 +126,9 @@
     color: var(--text);
     font-size: 13px;
 }
-.person-hint-input:focus { outline: none; border-color: var(--accent); }
+.person-field-input:focus { outline: none; border-color: var(--accent); }
+.person-field-notes { resize: vertical; font-family: var(--font-reading); }
+.person-detail-actions { display: flex; justify-content: flex-end; }
 .person-save-btn {
     padding: 6px 12px;
     font-size: 12px;
@@ -50,6 +140,8 @@
     transition: all 0.15s;
 }
 .person-save-btn:hover { background: var(--warm); border-color: var(--warm); }
+.person-save-btn:disabled { opacity: 0.5; cursor: default; }
+.person-save-btn:disabled:hover { background: var(--accent); border-color: var(--accent); }
 
 .memory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .memory-empty { font-size: 14px; color: var(--muted); font-style: italic; padding: 20px 0; grid-column: 1 / -1; }
@@ -76,10 +168,12 @@
 .fact-action-btn.danger:hover { border-color: var(--error); color: var(--error); }
 .fact-action-btn.save { background: var(--accent); color: var(--ink); border-color: var(--accent); }
 .fact-action-btn.save:hover { background: var(--warm); border-color: var(--warm); }
+.fact-action-btn:disabled { opacity: 0.5; cursor: default; }
 
 .fact-edit { display: flex; flex-direction: column; gap: 10px; }
 .fact-edit-input {
     width: 100%;
+    box-sizing: border-box;
     padding: 10px 12px;
     background: var(--surface);
     border: 1px solid var(--accent);
@@ -91,10 +185,13 @@
 }
 .fact-edit-input:focus { outline: none; }
 
+.memory-confirm-text { font-size: 14px; margin: 4px 0 16px; }
+.memory-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
 @media (max-width: 768px) {
     .memory-layout { padding: 20px 16px; }
     .memory-grid { grid-template-columns: 1fr; }
-    .person-row { flex-direction: column; align-items: flex-start; gap: 8px; }
-    .person-hint { width: 100%; justify-content: flex-start; }
-    .person-hint-input { flex: 1; width: auto; min-width: 0; }
+    .memory-header { flex-wrap: wrap; }
+    .memory-search { width: 100%; margin-left: 0; }
+    .contradiction-banner { flex-wrap: wrap; }
 }

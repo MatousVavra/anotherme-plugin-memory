@@ -38,6 +38,9 @@ class Person(BaseModel):
 
 
 class PersonUpdate(BaseModel):
+    relationship: str | None = None
+    notes: str | None = None
+    tags: list[str] | None = None
     pronunciation_hint: str | None = None
 
 
@@ -178,9 +181,20 @@ def _get_contradictions(conn, vault_name):
 
 def _resolve_contradiction(conn, vault_name, fact_id, action):
     if action == "confirm":
+        now = _now_utc()
+        row = conn.execute(
+            "SELECT key FROM memory_facts WHERE vault_name = ? AND id = ?",
+            (vault_name, fact_id),
+        ).fetchone()
+        if not row:
+            return False
         cur = conn.execute(
             "UPDATE memory_facts SET contradicted = 0, confidence = 1.0, updated_at = ? WHERE vault_name = ? AND id = ?",
-            (_now_utc(), vault_name, fact_id),
+            (now, vault_name, fact_id),
+        )
+        conn.execute(
+            "UPDATE memory_facts SET contradicted = 1, updated_at = ? WHERE vault_name = ? AND key = ? AND COALESCE(contradicted, 0) = 0 AND id != ?",
+            (now, vault_name, row["key"], fact_id),
         )
         conn.commit()
         return cur.rowcount > 0
@@ -216,6 +230,19 @@ def _get_people(conn, vault_name):
              "created_at": r["created_at"], "updated_at": r["updated_at"]} for r in rows]
 
 
+def _get_person(conn, vault_name, name):
+    row = conn.execute(
+        "SELECT name, relationship, notes, tags, pronunciation_hint, created_at, updated_at FROM memory_people WHERE vault_name = ? AND name = ?",
+        (vault_name, name),
+    ).fetchone()
+    if not row:
+        return None
+    return {"name": row["name"], "relationship": row["relationship"], "notes": row["notes"],
+            "tags": json.loads(row["tags"]) if row["tags"] else [],
+            "pronunciation_hint": row["pronunciation_hint"],
+            "created_at": row["created_at"], "updated_at": row["updated_at"]}
+
+
 # --- Scoring / keyword extraction (from src/context.py — owned by memory) ---
 
 def extract_keywords(text: str) -> list[str]:
@@ -243,15 +270,6 @@ def score_relevance(items: list[dict], keywords: list[str], recency_weight: floa
         scored.append((score, item))
     scored.sort(key=lambda x: x[0], reverse=True)
     return scored
-
-
-def _update_person_hint(conn, vault_name, name, hint):
-    cur = conn.execute(
-        "UPDATE memory_people SET pronunciation_hint = ?, updated_at = ? WHERE vault_name = ? AND name = ?",
-        (hint, _now_utc(), vault_name, name),
-    )
-    conn.commit()
-    return cur.rowcount > 0
 
 
 MEMORY_EXTRACT_SYSTEM = """You are a memory extraction agent. Given a conversation between a user and their AI assistant, extract any facts about the user that would be useful to remember for future conversations.
@@ -284,7 +302,7 @@ class MemoryApi:
                 model=self._llm.LLM_MODEL,
                 messages=[
                     {"role": "system", "content": MEMORY_EXTRACT_SYSTEM},
-                    {"role": "user", "content": str(messages)},
+                    {"role": "user", "content": json.dumps(messages, ensure_ascii=False)},
                 ],
             )
             content = resp.choices[0].message.content or "{}"
@@ -294,6 +312,8 @@ class MemoryApi:
                 if content.startswith("json"):
                     content = content[4:].strip()
             facts = json.loads(content)
+            if not isinstance(facts, dict):
+                return {}
         except Exception as e:
             logger.debug("Fact extraction failed: %s", e)
             return {}
@@ -324,6 +344,18 @@ class MemoryApi:
     # --- Vault domain methods (moved from src/vault.py) ---
 
     def create_person(self, vault_name, name, relationship=None, notes="", tags=None):
+        path = self._vault.vault_path(vault_name) / "People" / f"{name}.md"
+        if path.is_file():
+            content = path.read_text(encoding="utf-8")
+            additions = []
+            if relationship and relationship not in content:
+                additions += ["## Relationship", "", relationship, ""]
+            if notes and notes not in content:
+                additions += ["## Notes", "", notes, ""]
+            if additions:
+                content = content.rstrip("\n") + "\n\n" + "\n".join(additions)
+                path.write_text(content, encoding="utf-8")
+            return path
         parts = [f"# {name}", ""]
         if relationship:
             parts += ["## Relationship", "", relationship, ""]
@@ -403,12 +435,7 @@ class MemoryApi:
             line = line.strip()
             if ":" in line:
                 k, v = line.split(":", 1)
-                k = k.strip()
-                v = v.strip()
-                if v.startswith("[") and v.endswith("]"):
-                    existing[k] = v
-                else:
-                    existing[k] = v
+                existing[k.strip()] = v.strip()
 
         traits = []
         preferences = []
@@ -541,9 +568,22 @@ class Plugin:
 
         @router.put("/people/{name}", response_model=PersonUpdateResponse)
         async def update_person(name: str, body: PersonUpdate):
-            ok = await asyncio.to_thread(_update_person_hint, dbm.get_db(), ctx.vault_name, name, body.pronunciation_hint)
-            if not ok:
-                raise HTTPException(404, "Person not found")
+            def _apply():
+                conn = dbm.get_db()
+                existing = _get_person(conn, ctx.vault_name, name)
+                if existing:
+                    relationship = body.relationship if body.relationship is not None else existing["relationship"]
+                    notes = body.notes if body.notes is not None else (existing["notes"] or "")
+                    tags = body.tags if body.tags is not None else (existing["tags"] or [])
+                    hint = body.pronunciation_hint if body.pronunciation_hint is not None else existing["pronunciation_hint"]
+                else:
+                    relationship = body.relationship
+                    notes = body.notes or ""
+                    tags = body.tags or []
+                    hint = body.pronunciation_hint
+                _save_person(conn, ctx.vault_name, name, relationship, notes, tags, hint)
+                api.create_person(ctx.vault_name, name, relationship, notes, tags)
+            await asyncio.to_thread(_apply)
             return PersonUpdateResponse(detail="Person updated")
 
         @router.get("/projects")

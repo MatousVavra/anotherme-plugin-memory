@@ -85,7 +85,11 @@ def test_memory_people_list_and_update(client):
     alice = next(p for p in resp.json() if p["name"] == "Alice")
     assert alice["pronunciation_hint"] == "AH-liss"
 
-    assert client.put("/plugins/memory/people/Unknown", json={"pronunciation_hint": "x"}).status_code == 404
+    resp = client.put("/plugins/memory/people/Unknown", json={"relationship": "neighbor", "notes": "just moved in"})
+    assert resp.status_code == 200
+    unknown = next(p for p in client.get("/plugins/memory/people").json() if p["name"] == "Unknown")
+    assert unknown["relationship"] == "neighbor"
+    assert unknown["notes"] == "just moved in"
 
 
 # --- 5. Projects list ---

@@ -1,64 +1,140 @@
 <div class="memory-layout" x-data="memoryPlugin()">
-    <div class="memory-header">
-        <span class="memory-count" x-text="facts.length + ' facts collected'"></span>
-        <span class="memory-updated" x-show="facts.length > 0">Updated <span x-text="AM.utils.formatDate(facts[0]?.created_at)"></span></span>
-    </div>
-
-    <div class="filter-chips">
-        <button class="filter-chip" :class="{ active: filter === 'All' }" @click="filter = 'All'">All</button>
-        <button class="filter-chip" :class="{ active: filter === 'People' }" @click="filter = 'People'">People</button>
-        <button class="filter-chip" :class="{ active: filter === 'Work' }" @click="filter = 'Work'">Work</button>
-        <button class="filter-chip" :class="{ active: filter === 'Preferences' }" @click="filter = 'Preferences'">Preferences</button>
-        <button class="filter-chip" :class="{ active: filter === 'Health' }" @click="filter = 'Health'">Health</button>
-    </div>
-
-    <div class="people-section" x-show="people.length > 0">
-        <div class="people-header">People</div>
-        <div class="people-list">
-            <template x-for="person in people" :key="person.name">
-                <div class="person-row">
-                    <div class="person-name" x-text="person.name"></div>
-                    <div class="person-hint">
-                        <input
-                            type="text"
-                            class="person-hint-input"
-                            x-model="person.pronunciation_hint"
-                            placeholder="Pronunciation hint"
-                            :aria-label="'Pronunciation hint for ' + person.name"
-                        >
-                        <button class="person-save-btn" @click="savePersonHint(person)">Save</button>
+    <template x-if="loading">
+        <div class="memory-empty">Loading memories…</div>
+    </template>
+    <template x-if="!loading">
+        <div>
+            <template x-if="contradictions.length > 0 && !bannerDismissed">
+                <div class="contradiction-banner" role="alert">
+                    <span class="contradiction-banner-text" x-text="contradictions.length + ' conflicting ' + (contradictions.length === 1 ? 'memory' : 'memories')"></span>
+                    <div class="contradiction-banner-actions">
+                        <button class="contradiction-review-btn" @click="showReview = !showReview" x-text="showReview ? 'Hide' : 'Review'"></button>
+                        <button class="contradiction-close-btn" @click="bannerDismissed = true" aria-label="Dismiss">&times;</button>
                     </div>
                 </div>
             </template>
-        </div>
-    </div>
 
-    <div class="memory-grid">
-        <template x-if="filteredFacts().length === 0">
-            <div class="memory-empty">No facts collected yet. Your assistant learns as you chat.</div>
-        </template>
-        <template x-for="fact in filteredFacts()" :key="fact.id">
-            <div class="fact-card">
-                <template x-if="editingId !== fact.id">
-                    <div class="fact-content">
-                        <div class="fact-value" x-text="fact.value"></div>
-                        <div class="fact-source" x-text="factSource(fact)"></div>
-                        <div class="fact-actions">
-                            <button class="fact-action-btn" @click="startEditFact(fact)">Edit</button>
-                            <button class="fact-action-btn danger" @click="deleteFact(fact.id)">Remove</button>
+            <div class="contradiction-section" x-show="showReview && contradictions.length > 0">
+                <div class="people-header">Conflicting memories</div>
+                <template x-for="c in contradictions" :key="c.id">
+                    <div class="contradiction-card">
+                        <div class="contradiction-key" x-text="c.key"></div>
+                        <div class="contradiction-values">
+                            <div class="contradiction-value">
+                                <span class="contradiction-label">Old</span>
+                                <span class="contradiction-text" x-text="c.value"></span>
+                                <span class="contradiction-when" x-text="AM.utils.formatDate(c.updated_at || c.created_at)"></span>
+                            </div>
+                            <template x-if="activeFactFor(c)">
+                                <div class="contradiction-value new">
+                                    <span class="contradiction-label">New</span>
+                                    <span class="contradiction-text" x-text="activeFactFor(c).value"></span>
+                                    <span class="contradiction-when" x-text="AM.utils.formatDate(activeFactFor(c).updated_at || activeFactFor(c).created_at)"></span>
+                                </div>
+                            </template>
                         </div>
-                    </div>
-                </template>
-                <template x-if="editingId === fact.id">
-                    <div class="fact-edit">
-                        <textarea class="fact-edit-input" x-model="editValue" rows="2"></textarea>
-                        <div class="fact-actions">
-                            <button class="fact-action-btn save" @click="saveEditFact(fact.id)">Save</button>
-                            <button class="fact-action-btn" @click="editingId = null">Cancel</button>
+                        <div class="contradiction-actions">
+                            <button class="fact-action-btn save" :disabled="resolvingId !== null" @click="resolveContradiction(c, 'new')">Keep new</button>
+                            <button class="fact-action-btn" :disabled="resolvingId !== null" @click="resolveContradiction(c, 'old')">Keep old</button>
                         </div>
                     </div>
                 </template>
             </div>
-        </template>
-    </div>
+
+            <div class="memory-header">
+                <span class="memory-count" x-text="facts.length + ' facts collected'"></span>
+                <span class="memory-updated" x-show="facts.length > 0">Updated <span x-text="AM.utils.formatDate(facts[0]?.created_at)"></span></span>
+                <input
+                    type="search"
+                    class="memory-search"
+                    x-model="search"
+                    placeholder="Search memories"
+                    aria-label="Search memories"
+                >
+            </div>
+
+            <div class="filter-chips">
+                <button class="filter-chip" :class="{ active: filter === 'All' }" @click="filter = 'All'">All</button>
+                <template x-for="cat in categories()" :key="cat">
+                    <button class="filter-chip" :class="{ active: filter === cat }" @click="filter = cat" x-text="cat"></button>
+                </template>
+            </div>
+
+            <div class="people-section" x-show="people.length > 0">
+                <div class="people-header">People</div>
+                <div class="people-list">
+                    <template x-for="person in people" :key="person.name">
+                        <div class="person-item">
+                            <div class="person-row" @click="openPerson(person)" :aria-expanded="expandedPerson === person.name ? 'true' : 'false'">
+                                <div class="person-main">
+                                    <div class="person-name" x-text="person.name"></div>
+                                    <div class="person-meta">
+                                        <span class="person-relationship" x-show="person.relationship" x-text="person.relationship"></span>
+                                        <template x-for="tag in person.tags" :key="tag">
+                                            <span class="person-tag" x-text="tag"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <span class="person-chevron" x-text="expandedPerson === person.name ? '\u25be' : '\u25b8'"></span>
+                            </div>
+                            <div class="person-detail" x-show="expandedPerson === person.name">
+                                <template x-if="personDraft">
+                                    <div class="person-detail-fields">
+                                        <label class="person-field">
+                                            <span class="person-field-label">Relationship</span>
+                                            <input type="text" class="person-field-input" x-model="personDraft.relationship" placeholder="e.g. friend, colleague">
+                                        </label>
+                                        <label class="person-field">
+                                            <span class="person-field-label">Notes</span>
+                                            <textarea class="person-field-input person-field-notes" x-model="personDraft.notes" rows="2" placeholder="Notes"></textarea>
+                                        </label>
+                                        <label class="person-field">
+                                            <span class="person-field-label">Tags</span>
+                                            <input type="text" class="person-field-input" x-model="personDraft.tags" placeholder="comma separated">
+                                        </label>
+                                        <label class="person-field">
+                                            <span class="person-field-label">Pronunciation hint</span>
+                                            <input type="text" class="person-field-input" x-model="personDraft.pronunciation_hint" placeholder="e.g. MAH-toosh">
+                                        </label>
+                                        <div class="person-detail-actions">
+                                            <button class="person-save-btn" :disabled="!personDirty() || savingPerson" @click="savePerson()">Save</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="memory-grid">
+                <template x-if="filteredFacts().length === 0">
+                    <div class="memory-empty">No facts collected yet. Your assistant learns as you chat.</div>
+                </template>
+                <template x-for="fact in filteredFacts()" :key="fact.id">
+                    <div class="fact-card">
+                        <template x-if="editingId !== fact.id">
+                            <div class="fact-content">
+                                <div class="fact-value" x-text="fact.value"></div>
+                                <div class="fact-source" x-text="factSource(fact)"></div>
+                                <div class="fact-actions">
+                                    <button class="fact-action-btn" @click="startEditFact(fact)">Edit</button>
+                                    <button class="fact-action-btn danger" @click="deleteFact(fact)">Remove</button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="editingId === fact.id">
+                            <div class="fact-edit">
+                                <textarea class="fact-edit-input" x-model="editValue" rows="2"></textarea>
+                                <div class="fact-actions">
+                                    <button class="fact-action-btn save" @click="saveEditFact(fact.id)">Save</button>
+                                    <button class="fact-action-btn" @click="editingId = null">Cancel</button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
 </div>
